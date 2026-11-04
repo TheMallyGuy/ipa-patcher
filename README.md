@@ -1,4 +1,5 @@
 # Roblox IPA mod installer
+
 > [!TIP]
 > I recommend that you install the patched roblox version in [LiveContainer](https://github.com/LiveContainer/LiveContainer).
 
@@ -23,7 +24,7 @@ Run this if you decided to use the ipa patcher as an javascript with reference a
     bun run buildcli
 ```
 
-*Please have bun installed & `bun i` before running these^^*
+_Please have bun installed & `bun i` before running these^^_
 
 This command creates `rblx-ptch.exe` or `rblx-ptch.*` depends on your OS you're using.
 
