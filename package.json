@@ -1,0 +1,24 @@
+{
+  "name": "ipa-patcher",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "typecheck": "bun check",
+    "cli": "tsx src/cli.ts",
+    "buildcli": "bun build src/cli.ts --minify --banner \"/* GPL v3 */ \n/* https://github.com/TheMallyGuy/ipa-patcher */\" --compile --aot --outfile rblx-ptch",
+    "buildjs": "bun build src/modPatch.ts --minify --banner \"/* GPL v3 */ \n/* https://github.com/TheMallyGuy/ipa-patcher */\" --aot --target=bun --outfile rblx-ptch.js"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^7"
+  },
+  "dependencies": {
+    "cac": "^7.1.0",
+    "fflate": "^0.8.3",
+    "oxfmt": "^0.76.0",
+    "tsx": "^4.23.15"
+  }
+}
