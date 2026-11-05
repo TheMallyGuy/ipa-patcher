@@ -1,7 +1,18 @@
 import { CAC, cac } from "cac";
-import { readFile, writeFile } from "node:fs/promises";
-import { patch } from "./modPatch";
+import { readdir, readFile, writeFile } from "node:fs/promises";
+import { join, relative, sep } from "node:path";
+import { patch, type ModFiles } from "./modPatch";
 const cli: CAC = cac("rblx-ptch");
+
+async function readMod(dir: string): Promise<ModFiles> {
+  const out: ModFiles = {};
+  for (const entry of await readdir(dir, { recursive: true, withFileTypes: true })) {
+    if (!entry.isFile()) continue;
+    const full = join(entry.parentPath, entry.name);
+    out[relative(dir, full).split(sep).join("/")] = new Uint8Array(await readFile(full));
+  }
+  return out;
+}
 
 cli
   .command("[file]", "patch the roblox's file")
@@ -14,12 +25,10 @@ cli
     }
 
     const ipaBytes = new Uint8Array(await readFile(file));
-    patch(ipaBytes, Array.isArray(options.mod) ? options.mod : [options.mod], true).then(
-      async (out) => {
-        await writeFile(options.dest, out);
-        console.log(`Patched IPA written to ${options.dest}`);
-      },
-    );
+    const modDirs: string[] = Array.isArray(options.mod) ? options.mod : [options.mod];
+    const mods = await Promise.all(modDirs.map(readMod));
+    await writeFile(options.dest, patch(ipaBytes, mods, true));
+    console.log(`Patched IPA written to ${options.dest}`);
   });
 
 cli.help();
