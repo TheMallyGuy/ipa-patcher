@@ -1,6 +1,7 @@
 import { unzipSync, zipSync } from "fflate";
 import { readdir, readFile } from "fs/promises";
 import { join, relative, sep } from "path/win32";
+import { MOD_KEY } from "./constraints";
 
 async function walk(dir: string): Promise<string[]> {
   const out: string[] = [];
@@ -36,7 +37,7 @@ export async function patch(
   let done = 0;
   for (const { mod, path } of work) {
     const relPath = relative(mod, path).split(sep).join("/");
-    const key = "Payload/Roblox.app/Frameworks/RobloxLib.framework/" + relPath;
+    const key = MOD_KEY + relPath;
     if (logProgress) {
       const percent = (done / work.length) * 100;
       console.log(`Patching ${relPath} (${percent.toFixed(2)}%)`);
