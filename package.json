@@ -8,7 +8,8 @@
     "cli": "tsx src/cli.ts",
     "buildcli": "bun build src/cli.ts --minify --banner \"/* GPL v3 */ \n/* https://github.com/TheMallyGuy/ipa-patcher */\" --compile --aot --outfile rblx-ptch",
     "buildjs": "bun build src/modPatch.ts --minify --banner \"/* GPL v3 */ \n/* https://github.com/TheMallyGuy/ipa-patcher */\" --aot --target=bun --outfile rblx-ptch.js",
-    "buildtypes": "tsc src/modPatch.ts --declaration --emitDeclarationOnly --outDir dist"
+    "buildtypes": "tsc src/modPatch.ts --declaration --emitDeclarationOnly --outDir dist",
+    "compiletweak": "bun scripts/compileTweak.ts"
   },
   "dependencies": {
     "cac": "^7.1.0",
