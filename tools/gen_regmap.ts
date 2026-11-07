@@ -142,14 +142,16 @@ function buildMap(d: Uint8Array): Map<string, [number, "n" | "s"]> {
 
   // enumerate thunk family starting at RegisterString
   const WRAP = new Map<number, number>(); // addr -> arity (2|3|0)
-  const LDR_SINGLETON = (0xf9400000 | (0xb0 << 10) | (8 << 5)) >>> 0;
+  // `ldr x0, [x8, #imm]` loading the FLog singleton. The offset moves between
+  // builds (0x580 in 2.745, 0x70 in 2.746), so mask the imm12 field out.
+  const isLdrSingleton = (w: number) => ((w & 0xffc003ff) >>> 0) === ((0xf9400000 | (8 << 5)) >>> 0);
   {
     let va = stringWrap;
     for (;;) {
       let ok = false,
         nxt = 0;
       for (let j = 0; j < 8; j++) {
-        if (rd(va + j * 4) === LDR_SINGLETON && ((rd(va + (j + 1) * 4) & 0xfc000000) >>> 0) === 0x14000000) {
+        if (isLdrSingleton(rd(va + j * 4) >>> 0) && ((rd(va + (j + 1) * 4) & 0xfc000000) >>> 0) === 0x14000000) {
           ok = true;
           nxt = va + (j + 2) * 4;
           break;

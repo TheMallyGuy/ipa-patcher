@@ -92,17 +92,18 @@ static NSString *const kBakedConfig =
     @"  \"DFFlagDisableDPIScale\": \"true\""
     @"}";
 
-// PC server (this machine's LAN IP). Overridable at runtime via an "_server"
-// key in fflags.json or the served config.
-static NSString *const kServerURL = @"http://192.168.1.4:8777/fflags.json";
+// brsh serves the config on-device. Pulled ONCE at launch; the result replaces
+// fflags.json and stays the active config until the next launch pull.
+// Overridable via an "_server" key in fflags.json (e.g. the PC fflags_server).
+static NSString *const kServerURL = @"http://127.0.0.1:8777/fflags.json";
 
 static NSDictionary *unwrap(id j) {
     if (![j isKindOfClass:[NSDictionary class]]) return nil;
     return j[@"applicationSettings"] ?: j;
 }
 
-// Synchronous GET with short timeout; nil on any failure.
-static NSDictionary *fetchRemote(NSString *url) {
+// Synchronous GET with short timeout; raw body of a 200 response, nil on any failure.
+static NSData *fetchRemote(NSString *url) {
     if (!url.length) return nil;
     __block NSData *out = nil;
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
@@ -110,10 +111,31 @@ static NSDictionary *fetchRemote(NSString *url) {
         cachePolicy:NSURLRequestReloadIgnoringLocalCacheData timeoutInterval:2.0];
     [[[NSURLSession sharedSession] dataTaskWithRequest:req
         completionHandler:^(NSData *data, NSURLResponse *r, NSError *e) {
-            out = data; dispatch_semaphore_signal(sem);
+            if ([(NSHTTPURLResponse *)r statusCode] == 200) out = data;
+            dispatch_semaphore_signal(sem);
         }] resume];
     dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)));
-    return out ? unwrap([NSJSONSerialization JSONObjectWithData:out options:0 error:nil]) : nil;
+    return out;
+}
+
+// One-time launch pull from brsh. A few quick retries cover the moment brsh is
+// still switching to the background. On success the body replaces fflags.json.
+static void pullConfigOnce(void) {
+    NSData *d = [NSData dataWithContentsOfFile:flagsPath()];
+    NSDictionary *disk = d ? unwrap([NSJSONSerialization JSONObjectWithData:d options:0 error:nil]) : nil;
+    NSString *url = disk[@"_server"] ?: kServerURL;
+
+    for (int attempt = 1; attempt <= 5; attempt++) {
+        NSData *body = fetchRemote(url);
+        id json = body ? [NSJSONSerialization JSONObjectWithData:body options:0 error:nil] : nil;
+        if (unwrap(json)) {
+            [body writeToFile:flagsPath() atomically:YES];
+            rbxlog(@"pulled config from %@ (attempt %d), saved as current", url, attempt);
+            return;
+        }
+        [NSThread sleepForTimeInterval:1.0];
+    }
+    rbxlog(@"brsh not reachable at %@, keeping current fflags.json", url);
 }
 
 static void applyUserFlags(BOOL verbose) {
@@ -121,20 +143,17 @@ static void applyUserFlags(BOOL verbose) {
     if (!base) { if (verbose) rbxlog(@"RobloxLib not found, abort"); return; }
 
     NSMutableDictionary *flags = [NSMutableDictionary dictionary];
-    // precedence: baked < device file < PC server
+    // precedence: baked < fflags.json (last config pulled from brsh)
     NSDictionary *baked = unwrap([NSJSONSerialization JSONObjectWithData:
         [kBakedConfig dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil]);
     if (baked) [flags addEntriesFromDictionary:baked];
     NSData *d = [NSData dataWithContentsOfFile:flagsPath()];
     NSDictionary *disk = d ? unwrap([NSJSONSerialization JSONObjectWithData:d options:0 error:nil]) : nil;
     if (disk) [flags addEntriesFromDictionary:disk];
-    NSString *url = flags[@"_server"] ?: kServerURL;
-    NSDictionary *remote = fetchRemote(url);
-    if (remote) [flags addEntriesFromDictionary:remote];
 
     if (verbose)
-        rbxlog(@"apply: base=0x%lx map=%u remote=%@", (unsigned long)base, RBX_NREG,
-               remote ? @"ok" : @"(offline)");
+        rbxlog(@"apply: base=0x%lx map=%u flags=%lu", (unsigned long)base, RBX_NREG,
+               (unsigned long)flags.count);
 
     for (NSString *key in flags) {
         if ([key hasPrefix:@"_"]) continue;              // meta (e.g. _server)
@@ -159,10 +178,14 @@ static void init_rbxff(void) {
     if (![[NSFileManager defaultManager] fileExistsAtPath:flagsPath()])
         [kBakedConfig writeToFile:flagsPath() atomically:YES encoding:NSUTF8StringEncoding error:nil];
 
-    // Apply on a background queue: first pass at +10s (verbose), then re-apply
-    // every 5s (quiet) so PC-server edits take effect live without relaunch.
-    static dispatch_source_t timer;
     dispatch_queue_t q = dispatch_queue_create("rbxff.apply", DISPATCH_QUEUE_SERIAL);
+
+    // Pull the config from brsh right away (once), while brsh is still awake.
+    dispatch_async(q, ^{ pullConfigOnce(); });
+
+    // Apply from the saved file: first pass at +10s (verbose), then re-apply
+    // every 5s (quiet, no network) so the engine can't reset the values.
+    static dispatch_source_t timer;
     timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, q);
     dispatch_source_set_timer(timer,
         dispatch_time(DISPATCH_TIME_NOW, (int64_t)(10 * NSEC_PER_SEC)),
