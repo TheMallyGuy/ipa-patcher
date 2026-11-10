@@ -78,4 +78,4 @@ const regex = @"^Patched IPA written to\s+(?P<path>.+?)\s*$"
 [ios-runner](https://github.com/Roblox-DeployHistory-Updates/ios-runner/releases)
 
 # Clientsettings
-There's no way to do use fflags (ClientAppSettings.json) on ios. The only way to get fflags onto ios on mobile is using a tweak (aka injecting/modifying roblox memory) to modify fflags. **I will not publish a guide on how to do this, and i will not recommend you to make one.**
+getr brsh!!!
